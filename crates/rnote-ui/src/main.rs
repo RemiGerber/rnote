@@ -34,6 +34,8 @@ pub(crate) mod strokecontentpreview;
 pub(crate) mod strokewidthpicker;
 pub(crate) mod unitentry;
 pub(crate) mod utils;
+#[cfg(target_os = "windows")]
+pub(crate) mod win32_frame;
 pub(crate) mod workspacebrowser;
 
 // Re-exports

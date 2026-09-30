@@ -57,6 +57,15 @@ tracing-subscriber = { workspace = true }
 unicode-segmentation = { workspace = true }
 url = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+gdk4-win32 = { version = "0.10.3", features = ["win32"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [build-dependencies]
 anyhow = { workspace = true }
 glib-build-tools = { workspace = true }

@@ -134,6 +134,12 @@ impl ObjectImpl for RnAppWindow {
         self.setup_overview();
         self.setup_split_view();
         self.setup_tabbar();
+
+        // Let Windows handle moving, resizing and snapping the window. See `win32_frame`.
+        #[cfg(target_os = "windows")]
+        obj.connect_realize(|window| {
+            crate::win32_frame::install(window.upcast_ref::<gtk4::Window>())
+        });
     }
 
     fn dispose(&self) {

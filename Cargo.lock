@@ -1496,6 +1496,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "gdk4-win32"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a004ec8cbf0daecfc4f00590683dd1e61dd2d6b0b4a130c09340ff82ea59cc63"
+dependencies = [
+ "gdk4",
+ "gdk4-win32-sys",
+ "gio",
+ "glib",
+ "libc",
+ "windows",
+]
+
+[[package]]
+name = "gdk4-win32-sys"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eddc1ec7b8be04fec1feec2766ba53225c09d58ddfc7bd9054512fcae16f416f"
+dependencies = [
+ "gdk4-sys",
+ "glib-sys",
+ "libc",
+ "system-deps",
+]
+
+[[package]]
 name = "geo"
 version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3857,6 +3883,7 @@ dependencies = [
  "chrono",
  "fs_extra",
  "futures",
+ "gdk4-win32",
  "gettext-rs",
  "glib-build-tools",
  "gtk4",
@@ -3894,6 +3921,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-segmentation",
  "url",
+ "windows",
  "winresource",
 ]
 

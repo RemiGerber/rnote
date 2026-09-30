@@ -88,6 +88,7 @@ rnote_ui_sources = files(
     'strokewidthpicker/strokewidthsetter.rs',
     'unitentry.rs',
     'utils.rs',
+    'win32_frame.rs',
     'workspacebrowser/filerow/actions/duplicate.rs',
     'workspacebrowser/filerow/actions/mod.rs',
     'workspacebrowser/filerow/actions/open.rs',

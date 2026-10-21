@@ -96,6 +96,10 @@ impl PenHolder {
         &self.current_pen
     }
 
+    pub fn current_pen(&self) -> &Pen {
+        &self.current_pen
+    }
+
     pub fn current_pen_mut(&mut self) -> &mut Pen {
         &mut self.current_pen
     }

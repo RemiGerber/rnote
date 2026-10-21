@@ -1,33 +1,87 @@
 // Imports
 use crate::penpath::PenPath;
 use p2d::math::Vector2;
+use serde::{Deserialize, Serialize};
 
 /// The minimum number of flattened input points needed to attempt a recognition.
 const MIN_INPUT_POINTS: usize = 12;
-/// The minimum extent (in surface coordinates) of the stroke bounds on its larger axis for the
-/// stroke to be a scribble. Small marks stay strokes, whatever their shape.
-const MIN_EXTENT_SURFACE: f64 = 30.0;
-/// The minimum length of the stroke relative to the diagonal of its bounds.
+
+/// The thresholds that tell a scribble apart from an ordinary stroke.
 ///
-/// A scribble goes over the same place again and again, so it is much longer than the area it
-/// covers. Together with the reversals below this keeps ordinary strokes from being scribbles.
-const MIN_LENGTH_DIAG_RATIO: f64 = 2.0;
-/// The number of times the stroke has to reverse its direction along its dominant axis.
-///
-/// This is what separates a scribble from handwriting: writing advances along its own direction and
-/// rarely turns back, while a scribble runs back and forth over the same spot.
-const MIN_REVERSALS: usize = 3;
-/// How far the stroke has to turn back, relative to its extent along the dominant axis, to count as
-/// a reversal. Keeps the wobble of a shaky hand from counting.
-const REVERSAL_PROMINENCE_RATIO: f64 = 0.2;
-/// The smallest turn back (in surface coordinates) that counts as a reversal, whatever the extent.
-const REVERSAL_MIN_PROMINENCE_SURFACE: f64 = 8.0;
+/// The defaults are tuned for a deliberate scratch-out. Fast handwriting can run up and down
+/// often enough to pass them, so they are adjustable.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename = "scribble_recognition_options")]
+pub struct ScribbleRecognitionOptions {
+    /// The number of times the stroke has to reverse its direction along its dominant axis.
+    ///
+    /// This is what separates a scribble from handwriting: writing advances along its own
+    /// direction and rarely turns back, while a scribble runs back and forth over the same spot.
+    #[serde(rename = "min_reversals")]
+    pub min_reversals: u32,
+    /// How far the stroke has to turn back, relative to its extent along the dominant axis, to
+    /// count as a reversal.
+    ///
+    /// A scratch-out runs across the whole area on every pass, while the up- and down-strokes of
+    /// handwriting often cover only part of the letter height.
+    #[serde(rename = "reversal_prominence_ratio")]
+    pub reversal_prominence_ratio: f64,
+    /// The smallest turn back (in surface coordinates) that counts as a reversal, whatever the
+    /// extent. Keeps the wobble of a shaky hand from counting.
+    #[serde(rename = "reversal_min_prominence_surface")]
+    pub reversal_min_prominence_surface: f64,
+    /// The minimum extent (in surface coordinates) of the stroke bounds on its larger axis for
+    /// the stroke to be a scribble. Small marks stay strokes, whatever their shape.
+    #[serde(rename = "min_extent_surface")]
+    pub min_extent_surface: f64,
+    /// The minimum length of the stroke relative to the diagonal of its bounds.
+    ///
+    /// A scribble goes over the same place again and again, so it is much longer than the area
+    /// it covers.
+    #[serde(rename = "min_length_diag_ratio")]
+    pub min_length_diag_ratio: f64,
+}
+
+impl Default for ScribbleRecognitionOptions {
+    fn default() -> Self {
+        Self {
+            min_reversals: 3,
+            reversal_prominence_ratio: 0.2,
+            reversal_min_prominence_surface: 8.0,
+            min_extent_surface: 30.0,
+            min_length_diag_ratio: 2.0,
+        }
+    }
+}
+
+impl ScribbleRecognitionOptions {
+    /// The lower bound of `min_reversals`.
+    pub const MIN_REVERSALS_MIN: u32 = 1;
+    /// The upper bound of `min_reversals`.
+    pub const MIN_REVERSALS_MAX: u32 = 20;
+    /// The lower bound of `reversal_prominence_ratio`.
+    pub const REVERSAL_PROMINENCE_RATIO_MIN: f64 = 0.05;
+    /// The upper bound of `reversal_prominence_ratio`.
+    pub const REVERSAL_PROMINENCE_RATIO_MAX: f64 = 1.0;
+    /// The lower bound of `reversal_min_prominence_surface`.
+    pub const REVERSAL_MIN_PROMINENCE_SURFACE_MIN: f64 = 1.0;
+    /// The upper bound of `reversal_min_prominence_surface`.
+    pub const REVERSAL_MIN_PROMINENCE_SURFACE_MAX: f64 = 100.0;
+    /// The lower bound of `min_extent_surface`.
+    pub const MIN_EXTENT_SURFACE_MIN: f64 = 5.0;
+    /// The upper bound of `min_extent_surface`.
+    pub const MIN_EXTENT_SURFACE_MAX: f64 = 500.0;
+    /// The lower bound of `min_length_diag_ratio`.
+    pub const MIN_LENGTH_DIAG_RATIO_MIN: f64 = 1.0;
+    /// The upper bound of `min_length_diag_ratio`.
+    pub const MIN_LENGTH_DIAG_RATIO_MAX: f64 = 20.0;
+}
 
 /// Whether the drawn pen path is a scribble, i.e. the gesture of scratching something out.
 ///
 /// `zoom` is the zoom of the view the path was drawn in, used for the thresholds that are defined
 /// in surface coordinates so they mean the same thing on screen at any zoom.
-pub fn is_scribble(path: &PenPath, zoom: f64) -> bool {
+pub fn is_scribble(path: &PenPath, zoom: f64, options: &ScribbleRecognitionOptions) -> bool {
     let points = flattened_points(path);
     if points.len() < MIN_INPUT_POINTS {
         return false;
@@ -35,7 +89,7 @@ pub fn is_scribble(path: &PenPath, zoom: f64) -> bool {
 
     let (min, max) = points_bounds(&points);
     let extents = max - min;
-    if extents.x.max(extents.y) < MIN_EXTENT_SURFACE / zoom {
+    if extents.x.max(extents.y) < options.min_extent_surface / zoom {
         return false;
     }
     let diagonal = extents.length();
@@ -43,7 +97,7 @@ pub fn is_scribble(path: &PenPath, zoom: f64) -> bool {
         return false;
     }
 
-    if polyline_len(&points) < MIN_LENGTH_DIAG_RATIO * diagonal {
+    if polyline_len(&points) < options.min_length_diag_ratio * diagonal {
         return false;
     }
 
@@ -54,9 +108,10 @@ pub fn is_scribble(path: &PenPath, zoom: f64) -> bool {
         .iter()
         .fold(f64::NEG_INFINITY, |acc, v| acc.max(*v))
         - projected.iter().fold(f64::INFINITY, |acc, v| acc.min(*v));
-    let prominence = (REVERSAL_PROMINENCE_RATIO * span).max(REVERSAL_MIN_PROMINENCE_SURFACE / zoom);
+    let prominence = (options.reversal_prominence_ratio * span)
+        .max(options.reversal_min_prominence_surface / zoom);
 
-    count_reversals(&projected, prominence) >= MIN_REVERSALS
+    count_reversals(&projected, prominence) >= options.min_reversals as usize
 }
 
 /// Extract the flattened points of the pen path.
@@ -207,14 +262,22 @@ mod tests {
             .enumerate()
             .map(|(i, p)| p + jitter(i, 1.5));
 
-        assert!(is_scribble(&pen_path_from_points(points), 1.0));
+        assert!(is_scribble(
+            &pen_path_from_points(points),
+            1.0,
+            &ScribbleRecognitionOptions::default()
+        ));
     }
 
     #[test]
     fn a_straight_line_is_no_scribble() {
         let points = (0..=40).map(|i| Vector2::new(100.0 + 5.0 * i as f64, 100.0) + jitter(i, 1.0));
 
-        assert!(!is_scribble(&pen_path_from_points(points), 1.0));
+        assert!(!is_scribble(
+            &pen_path_from_points(points),
+            1.0,
+            &ScribbleRecognitionOptions::default()
+        ));
     }
 
     #[test]
@@ -229,7 +292,11 @@ mod tests {
             ) + jitter(i, 0.8)
         });
 
-        assert!(!is_scribble(&pen_path_from_points(points), 1.0));
+        assert!(!is_scribble(
+            &pen_path_from_points(points),
+            1.0,
+            &ScribbleRecognitionOptions::default()
+        ));
     }
 
     #[test]
@@ -239,7 +306,11 @@ mod tests {
             Vector2::new(100.0 + 50.0 * angle.cos(), 100.0 + 50.0 * angle.sin()) + jitter(i, 1.0)
         });
 
-        assert!(!is_scribble(&pen_path_from_points(points), 1.0));
+        assert!(!is_scribble(
+            &pen_path_from_points(points),
+            1.0,
+            &ScribbleRecognitionOptions::default()
+        ));
     }
 
     #[test]
@@ -247,7 +318,11 @@ mod tests {
         // The same gesture, but only a few millimeters wide: too small to be meant as an erase.
         let points = scribble_points(6, 20.0, 6.0);
 
-        assert!(!is_scribble(&pen_path_from_points(points), 1.0));
+        assert!(!is_scribble(
+            &pen_path_from_points(points),
+            1.0,
+            &ScribbleRecognitionOptions::default()
+        ));
     }
 
     #[test]
@@ -255,7 +330,11 @@ mod tests {
         // Zoomed in, the same document-space gesture covers enough of the screen.
         let points = scribble_points(6, 20.0, 6.0);
 
-        assert!(is_scribble(&pen_path_from_points(points), 4.0));
+        assert!(is_scribble(
+            &pen_path_from_points(points),
+            4.0,
+            &ScribbleRecognitionOptions::default()
+        ));
     }
 
     #[test]
@@ -263,6 +342,69 @@ mod tests {
         // Going over something once and back is a correction stroke, not a scratch-out.
         let points = scribble_points(2, 160.0, 15.0);
 
-        assert!(!is_scribble(&pen_path_from_points(points), 1.0));
+        assert!(!is_scribble(
+            &pen_path_from_points(points),
+            1.0,
+            &ScribbleRecognitionOptions::default()
+        ));
+    }
+
+    /// A hastily written "h", traced from a screen recording: after the stem was drawn as its own
+    /// stroke, this second stroke hooks in, runs up to the top, back down the stem, up again and
+    /// over the hump.
+    fn hasty_h_points() -> Vec<Vector2> {
+        let waypoints = [
+            (-8.0, 40.0),
+            (0.0, 46.0),
+            (8.0, 0.0),
+            (10.0, 48.0),
+            (13.0, 26.0),
+            (18.0, 21.0),
+            (22.0, 25.0),
+            (24.0, 46.0),
+        ];
+        waypoints
+            .windows(2)
+            .flat_map(|w| {
+                (0..10).map(move |step| {
+                    let t = step as f64 / 10.0;
+                    Vector2::new(
+                        100.0 + w[0].0 + (w[1].0 - w[0].0) * t,
+                        100.0 + w[0].1 + (w[1].1 - w[0].1) * t,
+                    )
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn hasty_handwriting_passes_the_default_thresholds() {
+        // Why the thresholds are adjustable: fast handwriting turns back often enough.
+        assert!(is_scribble(
+            &pen_path_from_points(hasty_h_points()),
+            1.0,
+            &ScribbleRecognitionOptions::default()
+        ));
+    }
+
+    #[test]
+    fn stricter_thresholds_keep_hasty_handwriting() {
+        let options = ScribbleRecognitionOptions {
+            min_reversals: 4,
+            reversal_prominence_ratio: 0.6,
+            ..Default::default()
+        };
+
+        assert!(!is_scribble(
+            &pen_path_from_points(hasty_h_points()),
+            1.0,
+            &options
+        ));
+        // While a proper scratch-out is still recognized.
+        assert!(is_scribble(
+            &pen_path_from_points(scribble_points(6, 160.0, 40.0)),
+            1.0,
+            &options
+        ));
     }
 }

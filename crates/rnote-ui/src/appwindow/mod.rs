@@ -385,6 +385,11 @@ impl RnAppWindow {
         if let Some(enable_text_preprocessing) = widget_flags.enable_text_preprocessing {
             canvas.set_text_preprocessing(enable_text_preprocessing);
         }
+        match widget_flags.axis_ticks_popup {
+            Some(true) => crate::axisticks::show_axis_ticks_popover(self, canvas),
+            Some(false) => crate::axisticks::hide_axis_ticks_popover(canvas),
+            None => {}
+        }
     }
 
     /// Get the active (selected) tab page.

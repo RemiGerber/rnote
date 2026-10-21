@@ -865,19 +865,30 @@ fn erase_with_scribble(
         return (false, widget_flags);
     }
     let is_scribble = match engine_view.store.get_stroke_ref(stroke_key) {
-        Some(Stroke::BrushStroke(brushstroke)) => {
-            scribblerecognition::is_scribble(&brushstroke.path, engine_view.camera.total_zoom())
-        }
+        Some(Stroke::BrushStroke(brushstroke)) => scribblerecognition::is_scribble(
+            &brushstroke.path,
+            engine_view.camera.total_zoom(),
+            &engine_view
+                .config
+                .pens_config
+                .brush_config
+                .scribble_recognition_options,
+        ),
         _ => false,
     };
     if !is_scribble {
         return (false, widget_flags);
     }
 
-    let (trashed, wf) = engine_view
+    let (trashed, modified_keys, wf) = engine_view
         .store
         .trash_strokes_hit_by(stroke_key, engine_view.camera.viewport());
     widget_flags |= wf;
+    engine_view.store.regenerate_rendering_for_strokes(
+        &modified_keys,
+        engine_view.camera.viewport(),
+        engine_view.camera.image_scale(),
+    );
     if trashed == 0 {
         return (false, widget_flags);
     }

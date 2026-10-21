@@ -920,6 +920,30 @@ impl Engine {
             .handle_animation_frame(&mut engine_view_mut!(self));
     }
 
+    /// The coordinate system whose unit markings can currently be edited, if any.
+    pub fn axis_ticks_edit(&self) -> Option<crate::pens::AxisTicksEdit> {
+        match self.penholder.current_pen() {
+            Pen::Shaper(shaper) => shaper.axis_ticks_edit(),
+            _ => None,
+        }
+    }
+
+    /// Set the number of unit markings on every half-axis of the coordinate system being edited.
+    pub fn axis_ticks_set_count(&mut self, count: u32) -> WidgetFlags {
+        match self.penholder.current_pen_mut() {
+            Pen::Shaper(shaper) => shaper.set_axis_ticks_count(count, &mut engine_view_mut!(self)),
+            _ => WidgetFlags::default(),
+        }
+    }
+
+    /// Finish editing the unit markings of the coordinate system.
+    pub fn axis_ticks_finish(&mut self) -> WidgetFlags {
+        match self.penholder.current_pen_mut() {
+            Pen::Shaper(shaper) => shaper.finish_axis_ticks_edit(&mut engine_view_mut!(self)),
+            _ => WidgetFlags::default(),
+        }
+    }
+
     pub fn current_pen_style_w_override(&self) -> PenStyle {
         self.penholder
             .current_pen_style_w_override(&engine_view!(self))

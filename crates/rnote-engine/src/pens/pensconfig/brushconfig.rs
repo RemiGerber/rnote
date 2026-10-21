@@ -4,6 +4,7 @@ use crate::store::chrono_comp::StrokeLayer;
 use rand::{RngExt, SeedableRng};
 use rnote_compose::Style;
 use rnote_compose::builders::PenPathBuilderType;
+use rnote_compose::scribblerecognition::ScribbleRecognitionOptions;
 use rnote_compose::style::PressureCurve;
 use rnote_compose::style::smooth::{LineCap, SmoothOptions};
 use rnote_compose::style::textured::TexturedOptions;
@@ -123,6 +124,9 @@ pub struct BrushConfig {
     /// Whether scribbling over strokes erases them.
     #[serde(rename = "scribble_erase_enabled")]
     pub scribble_erase_enabled: bool,
+    /// The thresholds a stroke has to pass to be recognized as a scribble.
+    #[serde(rename = "scribble_recognition_options")]
+    pub scribble_recognition_options: ScribbleRecognitionOptions,
     #[serde(rename = "ruler_config")]
     pub ruler_config: RulerConfig,
 }
@@ -138,6 +142,7 @@ impl Default for BrushConfig {
             shape_recognition_enabled: true,
             shape_recognition_delay: Self::SHAPE_RECOGNITION_DELAY_DEFAULT,
             scribble_erase_enabled: false,
+            scribble_recognition_options: ScribbleRecognitionOptions::default(),
             ruler_config: RulerConfig::default(),
         }
     }

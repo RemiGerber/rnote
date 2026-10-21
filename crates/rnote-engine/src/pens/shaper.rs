@@ -2,10 +2,12 @@
 use super::PenBehaviour;
 use super::PenStyle;
 use crate::engine::{EngineView, EngineViewMut};
-use crate::strokes::ShapeStroke;
+use crate::store::StrokeKey;
 use crate::strokes::Stroke;
+use crate::strokes::{AxisTicks, ShapeStroke};
 use crate::{DrawableOnDoc, WidgetFlags};
 use p2d::bounding_volume::Aabb;
+use p2d::math::Vector2;
 use piet::RenderContext;
 use rnote_compose::Shape;
 use rnote_compose::builders::buildable::{Buildable, BuilderCreator, BuilderProgress};
@@ -24,7 +26,93 @@ enum ShaperState {
     Idle,
     BuildShape {
         builder: Box<dyn Buildable<Emit = Shape>>,
+        builder_type: ShapeBuilderType,
+        /// The sum of the pen pressure of all pressed events, for the mean pressure of the shape.
+        pressure_sum: f64,
+        pressure_count: u32,
     },
+    /// A coordinate system was just drawn and the number of its unit markings can still be changed.
+    EditAxisTicks {
+        keys: Vec<StrokeKey>,
+        count: u32,
+        constant_spacing: bool,
+        anchor: Aabb,
+    },
+}
+
+/// The coordinate system the unit markings of which can currently be edited.
+#[derive(Debug, Clone, Copy)]
+pub struct AxisTicksEdit {
+    /// The number of markings on each half-axis, or on the shortest one with constant spacing.
+    pub count: u32,
+    /// Whether all half-axes have the same distance between markings.
+    pub constant_spacing: bool,
+    /// The bounds of the coordinate system.
+    pub anchor: Aabb,
+}
+
+fn is_coord_system(builder_type: ShapeBuilderType) -> bool {
+    matches!(
+        builder_type,
+        ShapeBuilderType::CoordSystem2D
+            | ShapeBuilderType::QuadrantCoordSystem2D
+            | ShapeBuilderType::CoordSystem3D
+    )
+}
+
+/// Whether a half-axis running from the origin in the given direction is negative, by the usual
+/// convention and regardless of the direction it was drawn in: x grows to the right, y grows
+/// upwards, and the z axis of 3D coordinate systems grows towards the lower left.
+fn is_negative_half_axis(dir: Vector2) -> bool {
+    let (dx, dy) = (dir.x.abs(), dir.y.abs());
+    if (dx - dy).abs() <= 1e-6 * (dx + dy) {
+        // Diagonal z axis
+        dir.x > 0.0
+    } else if dx > dy {
+        dir.x < 0.0
+    } else {
+        // Surface coordinates grow downwards
+        dir.y > 0.0
+    }
+}
+
+/// The lengths of the half-axes of a coordinate system.
+fn half_axis_lengths(store: &crate::store::StrokeStore, keys: &[StrokeKey]) -> Vec<f64> {
+    keys.iter()
+        .map(|&key| match store.get_stroke_ref(key) {
+            Some(Stroke::ShapeStroke(ShapeStroke {
+                shape: Shape::Line(line),
+                ..
+            })) => (line.end - line.start).length(),
+            _ => 0.0,
+        })
+        .collect()
+}
+
+/// Lay out the ticks of all half-axes of a coordinate system for the given count.
+fn apply_axis_ticks_count(
+    store: &mut crate::store::StrokeStore,
+    keys: &[StrokeKey],
+    count: u32,
+    constant_spacing: bool,
+) {
+    let layouts = AxisTicks::layouts(&half_axis_lengths(store, keys), count, constant_spacing);
+    for (&key, (axis_count, spacing_fraction)) in keys.iter().zip(layouts) {
+        if let Some(Stroke::ShapeStroke(shapestroke)) = store.get_stroke_mut(key)
+            && let Some(ticks) = &mut shapestroke.axis_ticks
+        {
+            ticks.set_layout(axis_count, spacing_fraction);
+        }
+    }
+    store.update_geometry_for_strokes(keys);
+}
+
+fn mean_pressure(sum: f64, count: u32) -> f64 {
+    if count == 0 {
+        Element::PRESSURE_DEFAULT
+    } else {
+        sum / count as f64
+    }
 }
 
 #[derive(Debug)]
@@ -46,7 +134,12 @@ impl PenBehaviour for Shaper {
     }
 
     fn deinit(&mut self) -> WidgetFlags {
-        WidgetFlags::default()
+        let mut widget_flags = WidgetFlags::default();
+        if matches!(self.state, ShaperState::EditAxisTicks { .. }) {
+            self.state = ShaperState::Idle;
+            widget_flags.axis_ticks_popup = Some(false);
+        }
+        widget_flags
     }
 
     fn style(&self) -> PenStyle {
@@ -65,7 +158,19 @@ impl PenBehaviour for Shaper {
     ) -> (EventResult<PenProgress>, WidgetFlags) {
         let mut widget_flags = WidgetFlags::default();
 
+        // A new pen press ends the editing of the unit markings of the last coordinate system.
+        if matches!(self.state, ShaperState::EditAxisTicks { .. })
+            && matches!(event, PenEvent::Down { .. })
+        {
+            widget_flags |= self.finish_axis_ticks_edit(engine_view);
+        }
+
         let event_result = match (&mut self.state, event) {
+            (ShaperState::EditAxisTicks { .. }, _) => EventResult {
+                handled: false,
+                propagate: EventPropagation::Proceed,
+                progress: PenProgress::Idle,
+            },
             (ShaperState::Idle, PenEvent::Down { mut element, .. }) => {
                 engine_view
                     .config
@@ -76,12 +181,12 @@ impl PenBehaviour for Shaper {
                     .document
                     .snap_position(element.pos, engine_view.config);
 
+                let builder_type = engine_view.config.pens_config.shaper_config.builder_type;
                 self.state = ShaperState::BuildShape {
-                    builder: new_builder(
-                        engine_view.config.pens_config.shaper_config.builder_type,
-                        element,
-                        now,
-                    ),
+                    builder: new_builder(builder_type, element, now),
+                    builder_type,
+                    pressure_sum: element.pressure,
+                    pressure_count: 1,
                 };
 
                 EventResult {
@@ -104,7 +209,22 @@ impl PenBehaviour for Shaper {
                     progress: PenProgress::Finished,
                 }
             }
-            (ShaperState::BuildShape { builder }, mut event) => {
+            (
+                ShaperState::BuildShape {
+                    builder,
+                    builder_type,
+                    pressure_sum,
+                    pressure_count,
+                },
+                mut event,
+            ) => {
+                if let PenEvent::Down { element, .. } = &event {
+                    *pressure_sum += element.pressure;
+                    *pressure_count += 1;
+                }
+                let pressure = mean_pressure(*pressure_sum, *pressure_count);
+                let builder_type = *builder_type;
+
                 // Use Ctrl to temporarily enable/disable constraints when the switch is off/on
                 let mut constraints = engine_view
                     .config
@@ -147,7 +267,7 @@ impl PenBehaviour for Shaper {
                             .config
                             .pens_config
                             .shaper_config
-                            .gen_style_for_current_options();
+                            .gen_style_with_pressure(pressure);
                         let shapes_emitted = !shapes.is_empty();
 
                         for shape in shapes {
@@ -170,21 +290,72 @@ impl PenBehaviour for Shaper {
                         PenProgress::InProgress
                     }
                     BuilderProgress::Finished(shapes) => {
-                        let mut style = engine_view
-                            .config
-                            .pens_config
-                            .shaper_config
-                            .gen_style_for_current_options();
+                        let shaper_config = &engine_view.config.pens_config.shaper_config;
+                        let mut style = shaper_config.gen_style_with_pressure(pressure);
+                        let axis_ticks = shaper_config.axis_ticks_enabled
+                            && is_coord_system(builder_type)
+                            && shapes.iter().all(|shape| matches!(shape, Shape::Line(_)));
+                        let (tick_size, tick_numbering, tick_spacing, constant_spacing) = (
+                            shaper_config.axis_tick_size,
+                            shaper_config.axis_tick_numbering,
+                            shaper_config.axis_tick_spacing,
+                            shaper_config.axis_tick_constant_spacing,
+                        );
+                        // The default count gives the shortest half-axis about the default spacing
+                        let tick_count = shapes
+                            .iter()
+                            .filter_map(|shape| match shape {
+                                Shape::Line(line) => Some((line.end - line.start).length()),
+                                _ => None,
+                            })
+                            .fold(f64::INFINITY, f64::min);
+                        let tick_count = if tick_count.is_finite() {
+                            ((tick_count / tick_spacing).round() as u32)
+                                .clamp(AxisTicks::COUNT_MIN, AxisTicks::COUNT_MAX)
+                        } else {
+                            AxisTicks::COUNT_MIN
+                        };
 
                         let shapes_emitted = !shapes.is_empty();
+                        let mut keys = Vec::with_capacity(shapes.len());
                         for shape in shapes {
-                            let key = engine_view.store.insert_stroke(
-                                Stroke::ShapeStroke(ShapeStroke::new(shape, style.clone())),
-                                None,
-                            );
+                            let stroke = match &shape {
+                                Shape::Line(line) if axis_ticks => {
+                                    let negative = is_negative_half_axis(line.end - line.start);
+                                    ShapeStroke::new_axis(
+                                        shape,
+                                        style.clone(),
+                                        AxisTicks::new(
+                                            tick_count,
+                                            tick_size,
+                                            tick_numbering,
+                                            negative,
+                                        ),
+                                    )
+                                }
+                                _ => ShapeStroke::new(shape, style.clone()),
+                            };
+                            let key = engine_view
+                                .store
+                                .insert_stroke(Stroke::ShapeStroke(stroke), None);
+                            keys.push(key);
                             style.advance_seed();
                             engine_view.store.regenerate_rendering_for_stroke(
                                 key,
+                                engine_view.camera.viewport(),
+                                engine_view.camera.image_scale(),
+                            );
+                        }
+
+                        if axis_ticks {
+                            apply_axis_ticks_count(
+                                engine_view.store,
+                                &keys,
+                                tick_count,
+                                constant_spacing,
+                            );
+                            engine_view.store.regenerate_rendering_for_strokes(
+                                &keys,
                                 engine_view.camera.viewport(),
                                 engine_view.camera.image_scale(),
                             );
@@ -198,6 +369,18 @@ impl PenBehaviour for Shaper {
                                 .resize_autoexpand(engine_view.store, engine_view.camera)
                                 | engine_view.store.record(Instant::now());
                             widget_flags.store_modified = true;
+
+                            if axis_ticks
+                                && let Some(anchor) = engine_view.store.bounds_for_strokes(&keys)
+                            {
+                                self.state = ShaperState::EditAxisTicks {
+                                    keys,
+                                    count: tick_count,
+                                    constant_spacing,
+                                    anchor,
+                                };
+                                widget_flags.axis_ticks_popup = Some(true);
+                            }
                         }
                         PenProgress::Finished
                     }
@@ -227,17 +410,101 @@ impl PenBehaviour for Shaper {
     }
 }
 
+impl Shaper {
+    /// The coordinate system whose unit markings can currently be edited.
+    pub fn axis_ticks_edit(&self) -> Option<AxisTicksEdit> {
+        match &self.state {
+            ShaperState::EditAxisTicks {
+                count,
+                constant_spacing,
+                anchor,
+                ..
+            } => Some(AxisTicksEdit {
+                count: *count,
+                constant_spacing: *constant_spacing,
+                anchor: *anchor,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Set the number of unit markings on every half-axis of the coordinate system being edited.
+    pub fn set_axis_ticks_count(
+        &mut self,
+        new_count: u32,
+        engine_view: &mut EngineViewMut,
+    ) -> WidgetFlags {
+        let mut widget_flags = WidgetFlags::default();
+        let ShaperState::EditAxisTicks {
+            keys,
+            count,
+            constant_spacing,
+            anchor,
+        } = &mut self.state
+        else {
+            return widget_flags;
+        };
+        let new_count = new_count.clamp(AxisTicks::COUNT_MIN, AxisTicks::COUNT_MAX);
+        if new_count == *count {
+            return widget_flags;
+        }
+        *count = new_count;
+
+        apply_axis_ticks_count(engine_view.store, keys, new_count, *constant_spacing);
+        engine_view.store.regenerate_rendering_for_strokes(
+            keys,
+            engine_view.camera.viewport(),
+            engine_view.camera.image_scale(),
+        );
+        if let Some(bounds) = engine_view.store.bounds_for_strokes(keys) {
+            *anchor = bounds;
+        }
+
+        widget_flags |= engine_view
+            .document
+            .resize_autoexpand(engine_view.store, engine_view.camera);
+        widget_flags.store_modified = true;
+        widget_flags.redraw = true;
+        widget_flags
+    }
+
+    /// End editing the unit markings. The changes become part of the history entry of the coordinate system.
+    pub fn finish_axis_ticks_edit(&mut self, engine_view: &mut EngineViewMut) -> WidgetFlags {
+        let mut widget_flags = WidgetFlags::default();
+        if matches!(self.state, ShaperState::EditAxisTicks { .. }) {
+            self.state = ShaperState::Idle;
+            widget_flags |= engine_view
+                .store
+                .update_latest_history_entry(Instant::now());
+            widget_flags.axis_ticks_popup = Some(false);
+        }
+        widget_flags
+    }
+
+    /// The mean pen pressure of the shape being built.
+    fn current_pressure(&self) -> f64 {
+        match &self.state {
+            ShaperState::BuildShape {
+                pressure_sum,
+                pressure_count,
+                ..
+            } => mean_pressure(*pressure_sum, *pressure_count),
+            _ => Element::PRESSURE_DEFAULT,
+        }
+    }
+}
+
 impl DrawableOnDoc for Shaper {
     fn bounds_on_doc(&self, engine_view: &EngineView) -> Option<Aabb> {
         let style = engine_view
             .config
             .pens_config
             .shaper_config
-            .gen_style_for_current_options();
+            .gen_style_with_pressure(self.current_pressure());
 
         match &self.state {
-            ShaperState::Idle => None,
-            ShaperState::BuildShape { builder } => {
+            ShaperState::Idle | ShaperState::EditAxisTicks { .. } => None,
+            ShaperState::BuildShape { builder, .. } => {
                 builder.bounds(&style, engine_view.camera.total_zoom())
             }
         }
@@ -253,11 +520,11 @@ impl DrawableOnDoc for Shaper {
             .config
             .pens_config
             .shaper_config
-            .gen_style_for_current_options();
+            .gen_style_with_pressure(self.current_pressure());
 
         match &self.state {
-            ShaperState::Idle => {}
-            ShaperState::BuildShape { builder } => {
+            ShaperState::Idle | ShaperState::EditAxisTicks { .. } => {}
+            ShaperState::BuildShape { builder, .. } => {
                 builder.draw_styled(cx, &style, engine_view.camera.total_zoom())
             }
         }
@@ -288,5 +555,22 @@ fn new_builder(
         ShapeBuilderType::CubBez => Box::new(CubBezBuilder::start(element, now)),
         ShapeBuilderType::Polyline => Box::new(PolylineBuilder::start(element, now)),
         ShapeBuilderType::Polygon => Box::new(PolygonBuilder::start(element, now)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn half_axis_sign_follows_convention_not_drawing_direction() {
+        // Right and up are positive, left and down negative
+        assert!(!is_negative_half_axis(Vector2::new(10.0, 0.0)));
+        assert!(is_negative_half_axis(Vector2::new(-10.0, 0.0)));
+        assert!(!is_negative_half_axis(Vector2::new(0.0, -10.0)));
+        assert!(is_negative_half_axis(Vector2::new(0.0, 10.0)));
+        // The 3D z axis grows towards the lower left
+        assert!(!is_negative_half_axis(Vector2::new(-5.0, 5.0)));
+        assert!(is_negative_half_axis(Vector2::new(5.0, -5.0)));
     }
 }

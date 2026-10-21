@@ -48,6 +48,18 @@ mod imp {
         #[template_child]
         pub(crate) highlight_opacity_row: TemplateChild<adw::SpinRow>,
         #[template_child]
+        pub(crate) pen_pressure_row: TemplateChild<adw::SwitchRow>,
+        #[template_child]
+        pub(crate) axis_ticks_row: TemplateChild<adw::ExpanderRow>,
+        #[template_child]
+        pub(crate) axis_tick_spacing_row: TemplateChild<adw::SpinRow>,
+        #[template_child]
+        pub(crate) axis_tick_size_row: TemplateChild<adw::SpinRow>,
+        #[template_child]
+        pub(crate) axis_tick_numbering_row: TemplateChild<adw::SwitchRow>,
+        #[template_child]
+        pub(crate) axis_tick_constant_spacing_row: TemplateChild<adw::SwitchRow>,
+        #[template_child]
         pub(crate) smoothstyle_group: TemplateChild<adw::PreferencesGroup>,
         #[template_child]
         pub(crate) smoothstyle_line_cap_row: TemplateChild<adw::ComboRow>,
@@ -328,6 +340,83 @@ impl RnShaperPage {
             }
         ));
 
+        // Pen pressure
+        imp.pen_pressure_row.connect_active_notify(clone!(
+            #[weak]
+            appwindow,
+            move |row| {
+                appwindow
+                    .engine_config()
+                    .write()
+                    .pens_config
+                    .shaper_config
+                    .pen_pressure = row.is_active();
+            }
+        ));
+
+        // Coordinate system ticks
+        imp.axis_ticks_row.connect_enable_expansion_notify(clone!(
+            #[weak]
+            appwindow,
+            move |row| {
+                appwindow
+                    .engine_config()
+                    .write()
+                    .pens_config
+                    .shaper_config
+                    .axis_ticks_enabled = row.enables_expansion();
+            }
+        ));
+        imp.axis_tick_spacing_row.connect_changed(clone!(
+            #[weak]
+            appwindow,
+            move |row| {
+                appwindow
+                    .engine_config()
+                    .write()
+                    .pens_config
+                    .shaper_config
+                    .axis_tick_spacing = row.value();
+            }
+        ));
+        imp.axis_tick_size_row.connect_changed(clone!(
+            #[weak]
+            appwindow,
+            move |row| {
+                appwindow
+                    .engine_config()
+                    .write()
+                    .pens_config
+                    .shaper_config
+                    .axis_tick_size = row.value();
+            }
+        ));
+        imp.axis_tick_numbering_row.connect_active_notify(clone!(
+            #[weak]
+            appwindow,
+            move |row| {
+                appwindow
+                    .engine_config()
+                    .write()
+                    .pens_config
+                    .shaper_config
+                    .axis_tick_numbering = row.is_active();
+            }
+        ));
+        imp.axis_tick_constant_spacing_row
+            .connect_active_notify(clone!(
+                #[weak]
+                appwindow,
+                move |row| {
+                    appwindow
+                        .engine_config()
+                        .write()
+                        .pens_config
+                        .shaper_config
+                        .axis_tick_constant_spacing = row.is_active();
+                }
+            ));
+
         // Smooth style
         // Line cap
         imp.smoothstyle_line_cap_row
@@ -604,6 +693,19 @@ impl RnShaperPage {
             .set_active(shaper_config.highlight_mode);
         imp.highlight_opacity_row
             .set_value((shaper_config.highlight_opacity * 100.0).round());
+
+        // Pen pressure and coordinate system ticks
+        imp.pen_pressure_row.set_active(shaper_config.pen_pressure);
+        imp.axis_ticks_row
+            .set_enable_expansion(shaper_config.axis_ticks_enabled);
+        imp.axis_tick_spacing_row
+            .set_value(shaper_config.axis_tick_spacing);
+        imp.axis_tick_size_row
+            .set_value(shaper_config.axis_tick_size);
+        imp.axis_tick_numbering_row
+            .set_active(shaper_config.axis_tick_numbering);
+        imp.axis_tick_constant_spacing_row
+            .set_active(shaper_config.axis_tick_constant_spacing);
 
         // Constraints
         imp.constraint_enabled_row

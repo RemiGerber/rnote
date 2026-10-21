@@ -65,6 +65,12 @@
     <!-- Shape config -->
     <object class="GtkPopover" id="shapeconfig_popover">
       <child>
+        <object class="GtkScrolledWindow">
+          <property name="hscrollbar-policy">never</property>
+          <property name="propagate-natural-width">true</property>
+          <property name="propagate-natural-height">true</property>
+          <property name="max-content-height">600</property>
+          <child>
         <object class="GtkBox">
           <property name="orientation">vertical</property>
           <property name="margin-top">6</property>
@@ -244,6 +250,68 @@
             </object>
           </child>
 
+          <!-- Pen pressure and coordinate system ticks -->
+          <child>
+            <object class="AdwPreferencesGroup">
+              <property name="title" translatable="yes">Shapes</property>
+              <child>
+                <object class="AdwSwitchRow" id="pen_pressure_row">
+                  <property name="title" translatable="yes">Pen Pressure</property>
+                  <property name="subtitle" translatable="yes">Pressing harder draws wider shapes</property>
+                </object>
+              </child>
+              <child>
+                <object class="AdwExpanderRow" id="axis_ticks_row">
+                  <property name="title" translatable="yes">Coordinate System Ticks</property>
+                  <property name="subtitle" translatable="yes">Unit markings on the axes</property>
+                  <property name="show-enable-switch">true</property>
+                  <child>
+                    <object class="AdwSpinRow" id="axis_tick_spacing_row">
+                      <property name="title" translatable="yes">Default Spacing</property>
+                      <property name="tooltip-text" translatable="yes">Sets the default number of ticks per half-axis</property>
+                      <property name="numeric">true</property>
+                      <property name="adjustment">
+                        <object class="GtkAdjustment">
+                          <property name="lower">5</property>
+                          <property name="upper">1000</property>
+                          <property name="step-increment">5</property>
+                          <property name="page-increment">25</property>
+                          <property name="value">50</property>
+                        </object>
+                      </property>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="AdwSpinRow" id="axis_tick_size_row">
+                      <property name="title" translatable="yes">Tick Size</property>
+                      <property name="numeric">true</property>
+                      <property name="adjustment">
+                        <object class="GtkAdjustment">
+                          <property name="lower">1</property>
+                          <property name="upper">50</property>
+                          <property name="step-increment">1</property>
+                          <property name="page-increment">5</property>
+                          <property name="value">6</property>
+                        </object>
+                      </property>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="AdwSwitchRow" id="axis_tick_numbering_row">
+                      <property name="title" translatable="yes">Numbering</property>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="AdwSwitchRow" id="axis_tick_constant_spacing_row">
+                      <property name="title" translatable="yes">Constant Spacing</property>
+                      <property name="subtitle" translatable="yes">On axes of different length, keep the distance between ticks the same instead of their number</property>
+                    </object>
+                  </child>
+                </object>
+              </child>
+            </object>
+          </child>
+
           <!-- Constraints -->
           <child>
             <object class="AdwPreferencesGroup">
@@ -281,6 +349,8 @@ constraints when this switch is off/on</property>
                 </object>
               </child>
             </object>
+          </child>
+        </object>
           </child>
         </object>
       </child>

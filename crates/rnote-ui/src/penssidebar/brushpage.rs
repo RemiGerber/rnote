@@ -7,6 +7,7 @@ use gtk4::{
 };
 use num_traits::cast::ToPrimitive;
 use rnote_compose::builders::PenPathBuilderType;
+use rnote_compose::scribblerecognition::ScribbleRecognitionOptions;
 use rnote_compose::style::PressureCurve;
 use rnote_compose::style::textured::{TexturedDotsDistribution, TexturedOptions};
 use rnote_engine::pens::pensconfig::BrushConfig;
@@ -52,7 +53,19 @@ mod imp {
         #[template_child]
         pub(crate) shaperecognition_delay_row: TemplateChild<adw::SpinRow>,
         #[template_child]
-        pub(crate) scribbleerase_row: TemplateChild<adw::SwitchRow>,
+        pub(crate) scribbleerase_row: TemplateChild<adw::ExpanderRow>,
+        #[template_child]
+        pub(crate) scribbleerase_min_turns_row: TemplateChild<adw::SpinRow>,
+        #[template_child]
+        pub(crate) scribbleerase_pass_height_row: TemplateChild<adw::SpinRow>,
+        #[template_child]
+        pub(crate) scribbleerase_pass_length_row: TemplateChild<adw::SpinRow>,
+        #[template_child]
+        pub(crate) scribbleerase_min_size_row: TemplateChild<adw::SpinRow>,
+        #[template_child]
+        pub(crate) scribbleerase_min_length_row: TemplateChild<adw::SpinRow>,
+        #[template_child]
+        pub(crate) scribbleerase_reset_row: TemplateChild<adw::ButtonRow>,
         #[template_child]
         pub(crate) solidstyle_pressure_curves_row: TemplateChild<adw::ComboRow>,
         #[template_child]
@@ -435,7 +448,86 @@ impl RnBrushPage {
         ));
 
         // Scratch to erase
-        imp.scribbleerase_row.connect_active_notify(clone!(
+        imp.scribbleerase_row
+            .connect_enable_expansion_notify(clone!(
+                #[weak]
+                appwindow,
+                move |row| {
+                    appwindow
+                        .engine_config()
+                        .write()
+                        .pens_config
+                        .brush_config
+                        .scribble_erase_enabled = row.enables_expansion();
+                }
+            ));
+
+        imp.scribbleerase_min_turns_row.get().set_range(
+            ScribbleRecognitionOptions::MIN_REVERSALS_MIN as f64,
+            ScribbleRecognitionOptions::MIN_REVERSALS_MAX as f64,
+        );
+        imp.scribbleerase_min_turns_row
+            .get()
+            .connect_changed(clone!(
+                #[weak]
+                appwindow,
+                move |row| {
+                    appwindow
+                        .engine_config()
+                        .write()
+                        .pens_config
+                        .brush_config
+                        .scribble_recognition_options
+                        .min_reversals = row.value().round() as u32;
+                }
+            ));
+
+        // The ratio is shown in percent
+        imp.scribbleerase_pass_height_row.get().set_range(
+            ScribbleRecognitionOptions::REVERSAL_PROMINENCE_RATIO_MIN * 100.0,
+            ScribbleRecognitionOptions::REVERSAL_PROMINENCE_RATIO_MAX * 100.0,
+        );
+        imp.scribbleerase_pass_height_row
+            .get()
+            .connect_changed(clone!(
+                #[weak]
+                appwindow,
+                move |row| {
+                    appwindow
+                        .engine_config()
+                        .write()
+                        .pens_config
+                        .brush_config
+                        .scribble_recognition_options
+                        .reversal_prominence_ratio = row.value() / 100.0;
+                }
+            ));
+
+        imp.scribbleerase_pass_length_row.get().set_range(
+            ScribbleRecognitionOptions::REVERSAL_MIN_PROMINENCE_SURFACE_MIN,
+            ScribbleRecognitionOptions::REVERSAL_MIN_PROMINENCE_SURFACE_MAX,
+        );
+        imp.scribbleerase_pass_length_row
+            .get()
+            .connect_changed(clone!(
+                #[weak]
+                appwindow,
+                move |row| {
+                    appwindow
+                        .engine_config()
+                        .write()
+                        .pens_config
+                        .brush_config
+                        .scribble_recognition_options
+                        .reversal_min_prominence_surface = row.value();
+                }
+            ));
+
+        imp.scribbleerase_min_size_row.get().set_range(
+            ScribbleRecognitionOptions::MIN_EXTENT_SURFACE_MIN,
+            ScribbleRecognitionOptions::MIN_EXTENT_SURFACE_MAX,
+        );
+        imp.scribbleerase_min_size_row.get().connect_changed(clone!(
             #[weak]
             appwindow,
             move |row| {
@@ -444,7 +536,37 @@ impl RnBrushPage {
                     .write()
                     .pens_config
                     .brush_config
-                    .scribble_erase_enabled = row.is_active();
+                    .scribble_recognition_options
+                    .min_extent_surface = row.value();
+            }
+        ));
+
+        imp.scribbleerase_min_length_row.get().set_range(
+            ScribbleRecognitionOptions::MIN_LENGTH_DIAG_RATIO_MIN,
+            ScribbleRecognitionOptions::MIN_LENGTH_DIAG_RATIO_MAX,
+        );
+        imp.scribbleerase_min_length_row
+            .get()
+            .connect_changed(clone!(
+                #[weak]
+                appwindow,
+                move |row| {
+                    appwindow
+                        .engine_config()
+                        .write()
+                        .pens_config
+                        .brush_config
+                        .scribble_recognition_options
+                        .min_length_diag_ratio = row.value();
+                }
+            ));
+
+        imp.scribbleerase_reset_row.get().connect_activated(clone!(
+            #[weak(rename_to=brushpage)]
+            self,
+            move |_| {
+                // Setting the rows writes the defaults back to the config.
+                brushpage.set_scribble_recognition_options(ScribbleRecognitionOptions::default());
             }
         ));
 
@@ -665,6 +787,20 @@ impl RnBrushPage {
         ));
     }
 
+    fn set_scribble_recognition_options(&self, options: ScribbleRecognitionOptions) {
+        let imp = self.imp();
+        imp.scribbleerase_min_turns_row
+            .set_value(options.min_reversals as f64);
+        imp.scribbleerase_pass_height_row
+            .set_value(options.reversal_prominence_ratio * 100.0);
+        imp.scribbleerase_pass_length_row
+            .set_value(options.reversal_min_prominence_surface);
+        imp.scribbleerase_min_size_row
+            .set_value(options.min_extent_surface);
+        imp.scribbleerase_min_length_row
+            .set_value(options.min_length_diag_ratio);
+    }
+
     pub(crate) fn refresh_ui(&self, appwindow: &RnAppWindow) {
         let imp = self.imp();
         let brush_config = appwindow
@@ -688,7 +824,8 @@ impl RnBrushPage {
         imp.shaperecognition_delay_row
             .set_value(brush_config.shape_recognition_delay.as_secs_f64());
         imp.scribbleerase_row
-            .set_active(brush_config.scribble_erase_enabled);
+            .set_enable_expansion(brush_config.scribble_erase_enabled);
+        self.set_scribble_recognition_options(brush_config.scribble_recognition_options);
 
         match brush_config.style {
             BrushStyle::Marker => {

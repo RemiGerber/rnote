@@ -299,162 +299,257 @@
     <!-- Brush config -->
     <object class="GtkPopover" id="brushconfig_popover">
       <child>
-        <object class="GtkBox">
-          <property name="orientation">vertical</property>
-          <property name="margin-top">6</property>
-          <property name="margin-bottom">6</property>
-          <property name="margin-start">6</property>
-          <property name="margin-end">6</property>
-          <property name="spacing">12</property>
+        <object class="GtkScrolledWindow">
+          <property name="hscrollbar-policy">never</property>
+          <property name="propagate-natural-width">true</property>
+          <property name="propagate-natural-height">true</property>
+          <property name="max-content-height">600</property>
           <child>
             <object class="GtkBox">
+              <property name="orientation">vertical</property>
+              <property name="margin-top">6</property>
+              <property name="margin-bottom">6</property>
+              <property name="margin-start">6</property>
+              <property name="margin-end">6</property>
+              <property name="spacing">12</property>
+              <child>
+                <object class="GtkBox">
+                  <child>
+                    <object class="GtkLabel">
+                      <property name="label" translatable="yes">Brush Configuration</property>
+                      <property name="hexpand">true</property>
+                      <property name="halign">center</property>
+                      <style>
+                        <class name="title-3" />
+                      </style>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="GtkButton" id="brushconfig_popover_close_button">
+                      <property name="icon-name">window-close-symbolic</property>
+                      <style>
+                        <class name="flat" />
+                        <class name="circular" />
+                      </style>
+                    </object>
+                  </child>
+                </object>
+              </child>
               <child>
                 <object class="GtkLabel">
-                  <property name="label" translatable="yes">Brush Configuration</property>
-                  <property name="hexpand">true</property>
-                  <property name="halign">center</property>
+                  <property name="label" translatable="yes">Path Modelling</property>
+                  <property name="halign">start</property>
                   <style>
-                    <class name="title-3" />
+                    <class name="heading" />
                   </style>
                 </object>
               </child>
               <child>
-                <object class="GtkButton" id="brushconfig_popover_close_button">
-                  <property name="icon-name">window-close-symbolic</property>
+                <object class="GtkListBox" id="brush_buildertype_listbox">
+                  <property name="width-request">300</property>
+                  <property name="selection-mode">browse</property>
                   <style>
-                    <class name="flat" />
-                    <class name="circular" />
+                    <class name="content" />
+                    <class name="large" />
                   </style>
-                </object>
-              </child>
-            </object>
-          </child>
-          <child>
-            <object class="GtkLabel">
-              <property name="label" translatable="yes">Path Modelling</property>
-              <property name="halign">start</property>
-              <style>
-                <class name="heading" />
-              </style>
-            </object>
-          </child>
-          <child>
-            <object class="GtkListBox" id="brush_buildertype_listbox">
-              <property name="width-request">300</property>
-              <property name="selection-mode">browse</property>
-              <style>
-                <class name="content" />
-                <class name="large" />
-              </style>
-              <child>
-                <object class="AdwActionRow" id="brush_buildertype_simple">
-                  <property name="title" translatable="yes">Simple</property>
-                  <property name="subtitle" translatable="yes">Produces line segments from the raw input.
-</property>
+                  <child>
+                    <object class="AdwActionRow" id="brush_buildertype_simple">
+                      <property name="title" translatable="yes">Simple</property>
+                      <property name="subtitle" translatable="yes">Produces line segments from the raw input.
+    </property>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="AdwActionRow" id="brush_buildertype_curved">
+                      <property name="title" translatable="yes">Curved</property>
+                      <property name="subtitle" translatable="yes">Produces smooth, curved segments.
+    </property>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="AdwActionRow" id="brush_buildertype_modeled">
+                      <property name="title" translatable="yes">Modeled</property>
+                      <property name="subtitle" translatable="yes">Produces a modeled path with physics based algorithms.
+    Results in the best looking handwriting.</property>
+                    </object>
+                  </child>
                 </object>
               </child>
               <child>
-                <object class="AdwActionRow" id="brush_buildertype_curved">
-                  <property name="title" translatable="yes">Curved</property>
-                  <property name="subtitle" translatable="yes">Produces smooth, curved segments.
-</property>
+                <!-- Shape recognition -->
+                <object class="AdwPreferencesGroup">
+                  <property name="title" translatable="yes">Shape Recognition</property>
+                  <child>
+                    <object class="AdwSwitchRow" id="shaperecognition_row">
+                      <property name="title" translatable="yes">Recognize Shapes</property>
+                      <property name="subtitle" translatable="yes">Hold the pen still at the end of a drawn stroke to replace it with the recognized geometric shape</property>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="AdwSpinRow" id="shaperecognition_delay_row">
+                      <property name="title" translatable="yes">Hold Duration</property>
+                      <property name="subtitle" translatable="yes">The duration in seconds the pen has to be held still to recognize the shape</property>
+                      <property name="adjustment">shaperecognition_delay_adj</property>
+                      <property name="numeric">true</property>
+                      <property name="digits">2</property>
+                      <property name="climb-rate">0.05</property>
+                    </object>
+                  </child>
                 </object>
               </child>
               <child>
-                <object class="AdwActionRow" id="brush_buildertype_modeled">
-                  <property name="title" translatable="yes">Modeled</property>
-                  <property name="subtitle" translatable="yes">Produces a modeled path with physics based algorithms.
-Results in the best looking handwriting.</property>
-                </object>
-              </child>
-            </object>
-          </child>
-          <child>
-            <!-- Shape recognition -->
-            <object class="AdwPreferencesGroup">
-              <property name="title" translatable="yes">Shape Recognition</property>
-              <child>
-                <object class="AdwSwitchRow" id="shaperecognition_row">
-                  <property name="title" translatable="yes">Recognize Shapes</property>
-                  <property name="subtitle" translatable="yes">Hold the pen still at the end of a drawn stroke to replace it with the recognized geometric shape</property>
-                </object>
-              </child>
-              <child>
-                <object class="AdwSpinRow" id="shaperecognition_delay_row">
-                  <property name="title" translatable="yes">Hold Duration</property>
-                  <property name="subtitle" translatable="yes">The duration in seconds the pen has to be held still to recognize the shape</property>
-                  <property name="adjustment">shaperecognition_delay_adj</property>
-                  <property name="numeric">true</property>
-                  <property name="digits">2</property>
-                  <property name="climb-rate">0.05</property>
-                </object>
-              </child>
-            </object>
-          </child>
-          <child>
-            <!-- Scribble erase -->
-            <object class="AdwPreferencesGroup">
-              <property name="title" translatable="yes">Scratch to Erase</property>
-              <child>
-                <object class="AdwSwitchRow" id="scribbleerase_row">
+                <!-- Scribble erase -->
+                <object class="AdwPreferencesGroup">
                   <property name="title" translatable="yes">Scratch to Erase</property>
-                  <property name="subtitle" translatable="yes">Scribble back and forth over strokes to erase them</property>
-                </object>
-              </child>
-            </object>
-          </child>
-          <child>
-            <!-- Solid options -->
-            <object class="AdwPreferencesGroup">
-              <property name="title" translatable="yes">Solid Style</property>
-              <child>
-                <object class="AdwComboRow" id="solidstyle_pressure_curves_row">
-                  <property name="title" translatable="yes">Pressure Curve</property>
-                  <property name="subtitle" translatable="yes">Choose a pressure curve</property>
-                  <property name="model">
-                    <object class="GtkStringList">
-                      <items>
-                        <item translatable="yes">Constant</item>
-                        <item translatable="yes">Linear</item>
-                        <item translatable="yes">Square root</item>
-                        <item translatable="yes">Cubic root</item>
-                        <item translatable="yes">Quadratic Parabola</item>
-                        <item translatable="yes">Cubic Parabola</item>
-                      </items>
+                  <child>
+                    <object class="AdwExpanderRow" id="scribbleerase_row">
+                      <property name="title" translatable="yes">Scratch to Erase</property>
+                      <property name="subtitle" translatable="yes">Scribble over strokes to erase them</property>
+                      <property name="show-enable-switch">true</property>
+                      <child>
+                        <object class="AdwSpinRow" id="scribbleerase_min_turns_row">
+                          <property name="title" translatable="yes">Minimum Turns</property>
+                          <property name="tooltip-text" translatable="yes">How often the stroke has to turn back on itself. Raise it if handwriting gets erased</property>
+                          <property name="numeric">true</property>
+                          <property name="adjustment">
+                            <object class="GtkAdjustment">
+                              <property name="lower">1</property>
+                              <property name="upper">20</property>
+                              <property name="step-increment">1</property>
+                              <property name="page-increment">2</property>
+                              <property name="value">3</property>
+                            </object>
+                          </property>
+                        </object>
+                      </child>
+                      <child>
+                        <object class="AdwSpinRow" id="scribbleerase_pass_height_row">
+                          <property name="title" translatable="yes">Turn Height (%)</property>
+                          <property name="tooltip-text" translatable="yes">How far the stroke has to run back for a turn to count, relative to the scribble's size. Raise it if handwriting gets erased</property>
+                          <property name="numeric">true</property>
+                          <property name="adjustment">
+                            <object class="GtkAdjustment">
+                              <property name="lower">5</property>
+                              <property name="upper">100</property>
+                              <property name="step-increment">5</property>
+                              <property name="page-increment">10</property>
+                              <property name="value">20</property>
+                            </object>
+                          </property>
+                        </object>
+                      </child>
+                      <child>
+                        <object class="AdwSpinRow" id="scribbleerase_pass_length_row">
+                          <property name="title" translatable="yes">Turn Length (px)</property>
+                          <property name="tooltip-text" translatable="yes">The shortest run back on screen that counts as a turn, so a shaky hand does not</property>
+                          <property name="numeric">true</property>
+                          <property name="adjustment">
+                            <object class="GtkAdjustment">
+                              <property name="lower">1</property>
+                              <property name="upper">100</property>
+                              <property name="step-increment">1</property>
+                              <property name="page-increment">5</property>
+                              <property name="value">8</property>
+                            </object>
+                          </property>
+                        </object>
+                      </child>
+                      <child>
+                        <object class="AdwSpinRow" id="scribbleerase_min_size_row">
+                          <property name="title" translatable="yes">Minimum Size (px)</property>
+                          <property name="tooltip-text" translatable="yes">How large on screen the scribble has to be. Smaller ones stay strokes</property>
+                          <property name="numeric">true</property>
+                          <property name="adjustment">
+                            <object class="GtkAdjustment">
+                              <property name="lower">5</property>
+                              <property name="upper">500</property>
+                              <property name="step-increment">5</property>
+                              <property name="page-increment">25</property>
+                              <property name="value">30</property>
+                            </object>
+                          </property>
+                        </object>
+                      </child>
+                      <child>
+                        <object class="AdwSpinRow" id="scribbleerase_min_length_row">
+                          <property name="title" translatable="yes">Length Ratio</property>
+                          <property name="tooltip-text" translatable="yes">How many times longer than its diagonal the stroke has to be</property>
+                          <property name="numeric">true</property>
+                          <property name="digits">1</property>
+                          <property name="adjustment">
+                            <object class="GtkAdjustment">
+                              <property name="lower">1</property>
+                              <property name="upper">20</property>
+                              <property name="step-increment">0.1</property>
+                              <property name="page-increment">1</property>
+                              <property name="value">2</property>
+                            </object>
+                          </property>
+                        </object>
+                      </child>
+                      <child>
+                        <object class="AdwButtonRow" id="scribbleerase_reset_row">
+                          <property name="title" translatable="yes">Reset to Defaults</property>
+                        </object>
+                      </child>
                     </object>
-                  </property>
-                </object>
-              </child>
-            </object>
-          </child>
-          <child>
-            <!-- Textured options -->
-            <object class="AdwPreferencesGroup">
-              <property name="title" translatable="yes">Textured Style</property>
-              <child>
-                <object class="AdwSpinRow" id="texturedstyle_density_row">
-                  <property name="title" translatable="yes">Density</property>
-                  <property name="subtitle" translatable="yes">The density is the amount of dots per 10x10 area</property>
-                  <property name="adjustment">texturedstyle_density_adj</property>
-                  <property name="numeric">true</property>
-                  <property name="digits">1</property>
-                  <property name="climb-rate">0.5</property>
+                  </child>
                 </object>
               </child>
               <child>
-                <object class="AdwComboRow" id="texturedstyle_distribution_row">
-                  <property name="title" translatable="yes" context="Drawing with a textured pen, how the dots of the texture are distributed">Stroke Dots Position Distribution</property>
-                  <property name="subtitle" translatable="yes">Choose a dots position probability distribution</property>
-                  <property name="model">
-                    <object class="GtkStringList">
-                      <items>
-                        <item translatable="yes" context="A variant of the textured pen texture distribution">Uniform</item>
-                        <item translatable="yes" context="A variant of the textured pen texture distribution">Normal</item>
-                        <item translatable="yes" context="A variant of the textured pen texture distribution">Exponential</item>
-                        <item translatable="yes" context="A variant of the textured pen texture distribution">Reverse Exponential</item>
-                      </items>
+                <!-- Solid options -->
+                <object class="AdwPreferencesGroup">
+                  <property name="title" translatable="yes">Solid Style</property>
+                  <child>
+                    <object class="AdwComboRow" id="solidstyle_pressure_curves_row">
+                      <property name="title" translatable="yes">Pressure Curve</property>
+                      <property name="subtitle" translatable="yes">Choose a pressure curve</property>
+                      <property name="model">
+                        <object class="GtkStringList">
+                          <items>
+                            <item translatable="yes">Constant</item>
+                            <item translatable="yes">Linear</item>
+                            <item translatable="yes">Square root</item>
+                            <item translatable="yes">Cubic root</item>
+                            <item translatable="yes">Quadratic Parabola</item>
+                            <item translatable="yes">Cubic Parabola</item>
+                          </items>
+                        </object>
+                      </property>
                     </object>
-                  </property>
+                  </child>
+                </object>
+              </child>
+              <child>
+                <!-- Textured options -->
+                <object class="AdwPreferencesGroup">
+                  <property name="title" translatable="yes">Textured Style</property>
+                  <child>
+                    <object class="AdwSpinRow" id="texturedstyle_density_row">
+                      <property name="title" translatable="yes">Density</property>
+                      <property name="subtitle" translatable="yes">The density is the amount of dots per 10x10 area</property>
+                      <property name="adjustment">texturedstyle_density_adj</property>
+                      <property name="numeric">true</property>
+                      <property name="digits">1</property>
+                      <property name="climb-rate">0.5</property>
+                    </object>
+                  </child>
+                  <child>
+                    <object class="AdwComboRow" id="texturedstyle_distribution_row">
+                      <property name="title" translatable="yes" context="Drawing with a textured pen, how the dots of the texture are distributed">Stroke Dots Position Distribution</property>
+                      <property name="subtitle" translatable="yes">Choose a dots position probability distribution</property>
+                      <property name="model">
+                        <object class="GtkStringList">
+                          <items>
+                            <item translatable="yes" context="A variant of the textured pen texture distribution">Uniform</item>
+                            <item translatable="yes" context="A variant of the textured pen texture distribution">Normal</item>
+                            <item translatable="yes" context="A variant of the textured pen texture distribution">Exponential</item>
+                            <item translatable="yes" context="A variant of the textured pen texture distribution">Reverse Exponential</item>
+                          </items>
+                        </object>
+                      </property>
+                    </object>
+                  </child>
                 </object>
               </child>
             </object>

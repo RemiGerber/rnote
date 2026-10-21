@@ -55,6 +55,28 @@ pub struct ShaperConfig {
     pub highlight_opacity: f64,
     #[serde(rename = "constraints")]
     pub constraints: Constraints,
+    /// Whether the pen pressure changes the width of drawn shapes.
+    #[serde(rename = "pen_pressure")]
+    pub pen_pressure: bool,
+    /// Whether coordinate systems get unit markings on their axes.
+    #[serde(rename = "axis_ticks_enabled")]
+    pub axis_ticks_enabled: bool,
+    /// The distance between two unit markings that the default tick count is derived from.
+    #[serde(
+        rename = "axis_tick_spacing",
+        with = "rnote_compose::serialize::f64_dp3"
+    )]
+    pub axis_tick_spacing: f64,
+    /// How far a unit marking reaches to each side of the axis.
+    #[serde(rename = "axis_tick_size", with = "rnote_compose::serialize::f64_dp3")]
+    pub axis_tick_size: f64,
+    /// Whether the unit markings are numbered.
+    #[serde(rename = "axis_tick_numbering")]
+    pub axis_tick_numbering: bool,
+    /// Whether all axes get the same distance between unit markings, instead of the same number
+    /// of markings, when they differ in length.
+    #[serde(rename = "axis_tick_constant_spacing")]
+    pub axis_tick_constant_spacing: bool,
 }
 
 impl Default for ShaperConfig {
@@ -72,6 +94,12 @@ impl Default for ShaperConfig {
             highlight_mode: false,
             highlight_opacity: 0.45,
             constraints,
+            pen_pressure: true,
+            axis_ticks_enabled: true,
+            axis_tick_spacing: Self::AXIS_TICK_SPACING_DEFAULT,
+            axis_tick_size: Self::AXIS_TICK_SIZE_DEFAULT,
+            axis_tick_numbering: true,
+            axis_tick_constant_spacing: false,
         }
     }
 }
@@ -79,6 +107,35 @@ impl Default for ShaperConfig {
 impl ShaperConfig {
     pub const STROKE_WIDTH_MIN: f64 = 0.1;
     pub const STROKE_WIDTH_MAX: f64 = 500.0;
+    pub const AXIS_TICK_SPACING_MIN: f64 = 5.0;
+    pub const AXIS_TICK_SPACING_MAX: f64 = 1000.0;
+    pub const AXIS_TICK_SPACING_DEFAULT: f64 = 50.0;
+    pub const AXIS_TICK_SIZE_MIN: f64 = 1.0;
+    pub const AXIS_TICK_SIZE_MAX: f64 = 50.0;
+    pub const AXIS_TICK_SIZE_DEFAULT: f64 = 6.0;
+
+    /// The factor the stroke width is scaled with for the given mean pen pressure.
+    ///
+    /// Uses the pressure curve of the smooth options and is normalized so that input without
+    /// pressure information (mouse, touch) leaves the width unchanged.
+    pub(crate) fn pressure_width_factor(&self, pressure: f64) -> f64 {
+        if !self.pen_pressure {
+            return 1.0;
+        }
+        let curve = self.smooth_options.pressure_curve;
+        let reference = curve.apply(1.0, rnote_compose::penpath::Element::PRESSURE_DEFAULT);
+        if reference <= f64::EPSILON {
+            return 1.0;
+        }
+        (curve.apply(1.0, pressure.clamp(0.0, 1.0)) / reference).clamp(0.1, 4.0)
+    }
+
+    /// The style for the current options with the width scaled by the pressure.
+    pub(crate) fn gen_style_with_pressure(&self, pressure: f64) -> Style {
+        let mut style = self.gen_style_for_current_options();
+        style.set_stroke_width(style.stroke_width() * self.pressure_width_factor(pressure));
+        style
+    }
 
     /// A new seed for new shapes
     pub(crate) fn new_style_seeds(&mut self) {
